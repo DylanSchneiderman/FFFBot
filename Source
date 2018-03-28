@@ -1,0 +1,242 @@
+//The function checkLink() is run every minute.
+/*The accompanying google sheets page can be viewed at: 
+https://docs.google.com/spreadsheets/d/1uDVpRlnpTk0oM4Q3GsA_CQ-gxorA7n-sWUOLZ7uqQbA/edit?usp=sharing
+*/
+
+var dateT = new Date();
+var day = dateT.getDate();
+var baseLink = "https://factorio.com/blog/post/fff-"
+function specCell(sheet, range) {
+  return SpreadsheetApp.getActiveSpreadsheet().getSheets()[sheet].getRange(range);
+}
+var newLink = specCell(0, 'E1');
+var nextRowG;
+
+function addRow() {
+  var newLink = specCell(0, 'E1');
+    //get the sheet to query
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheets()[0];
+  var range = sheet.getRange(1,1,sheet.getMaxRows(), sheet.getMaxColumns());
+  day = dateT.getDate();
+  //get the last row index
+  var lastRow = sheet.getLastRow() - 1;
+  var nextRow = lastRow + 1;
+  nextRowG = nextRow;
+  Logger.log(nextRow);
+  range.getCell(nextRow, 1).setValue((dateT.getMonth() + 1) + "-" + dateT.getDate() + "-" + dateT.getFullYear());
+  range.getCell(nextRow, 2).setValue(range.getCell(lastRow, 2).getValue() + 1);
+  range.getCell(nextRow, 3).setValue(baseLink.concat(range.getCell(nextRow, 2).getValue()));
+  newLink.setValue(1);
+  post();
+}
+
+function init() {
+  specCell(0, "A2").setValue((dateT.getMonth() + 1) + "-" + dateT.getDate() + "-" + dateT.getFullYear());
+}
+
+/*
+function postTest() {
+  Logger.log(dateT.getDay());
+  Logger.log(newLink.getValue());
+  if (newLink.getValue() == 1) {
+    post();
+    newLink.setValue(0);
+  }
+}
+*/
+
+function post() {
+  Logger.log(day);
+  Logger.log(dateT.getDate());
+  var serverTesting = '<webhook url to my testing server on discord>';
+  var server3RA = '<webhook url to the 3RA server on discord>';
+  var serverFactorio = '<webhook url to the official factorio server on discord>';
+  var serverNilaus = "<webhook url to Nilaus's discord server>";
+  var webhookListPing = [server3RA, serverFactorio];
+  var webhookListNoPing = [serverTesting, serverNilaus];
+  var webhookListT = [serverTesting];
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheets()[0];
+  var range = sheet.getRange(1,1,sheet.getMaxRows(), sheet.getMaxColumns());
+  
+  var FFFlinkPing = {
+    'content' : ('@here ' + range.getCell(sheet.getLastRow(), 5).getValue() + range.getCell(sheet.getLastRow(), 3).getValue())
+  };
+  var FFFlinkNoPing = {
+    'content' : (range.getCell(sheet.getLastRow(), 5).getValue() + range.getCell(sheet.getLastRow(), 3).getValue())
+  };
+  var optionsPing = {
+    'method' : 'post',
+    'contentType': 'application/json',
+    'payload' : JSON.stringify(FFFlinkPing)
+  };
+  var optionsNoPing = {
+    'method' : 'post',
+    'contentType': 'application/json',
+    'payload' : JSON.stringify(FFFlinkNoPing)
+  };
+  for each (var item in webhookListPing) {
+    UrlFetchApp.fetch(item, optionsPing);
+  }
+  for each (var item in webhookListNoPing) {
+    UrlFetchApp.fetch(item, optionsNoPing);
+  }
+  range.getCell(sheet.getLastRow(), 4).setValue('Yes');
+  postToRedditUsingIFTTT();
+}
+
+function newLogLine(head) {
+  Logger.log('');
+  Logger.log(head);
+  Logger.log("-------------------------");
+}
+
+function checkLink() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheets()[0];
+  var range = sheet.getRange(1,1,sheet.getMaxRows(), sheet.getMaxColumns());
+  var lastRow = sheet.getLastRow();
+  var nextRow = lastRow + 1;
+  if((dateT.getDay() == 5) || ((dateT.getMinutes() % 15) == 0)) {
+    try {
+      var response = UrlFetchApp.fetch(baseLink.concat(range.getCell(lastRow, 2).getValue() + 1));
+      var responseString = response.getContentText();
+      var sNdx = responseString.indexOf("Friday Facts #");
+      var eNdx = responseString.indexOf("| Factorio");
+      var FFFTitle = responseString.substring(sNdx, eNdx);
+	  while (FFFTitle.indexOf("&amp;") > -1) {
+        FFFTitle = FFFTitle.replace("&amp;", "&");
+      }
+      range.getCell(nextRow, 5).setValue(FFFTitle);
+      newLogLine("Indexes");
+      Logger.log("Character at index " + sNdx + " is " + responseString.charAt(sNdx));
+      Logger.log("Character at index " + eNdx + " is " + responseString.charAt(eNdx));
+      Logger.log('The Title of the FFF is "' + FFFTitle + '"');
+      addRow();
+    }
+    catch(err){
+      Logger.log('Error:' + err);
+      range.getCell(2, 6).setValue(baseLink.concat(range.getCell(lastRow, 2).getValue() + 1));
+      range.getCell(2, 7).setValue(dateT.getHours() + ':' + dateT.getMinutes() + ':' + dateT.getSeconds());
+	  range.getCell(5, 7).setValue(((dateT.getHours() + 6) % 24) + ':' + dateT.getMinutes() + ':' + dateT.getSeconds());
+    }
+  }
+}
+
+function postToRedditUsingIFTTT() {
+  var webhook = '<webhook url to an IFTTT applet I have that posts its content to the factorio subreddit>';
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheets()[0];
+  var range = sheet.getRange(1,1,sheet.getMaxRows(), sheet.getMaxColumns());
+  
+  var body = {
+    "value1" : (range.getCell(sheet.getLastRow(), 5).getValue().substring(0, range.getCell(sheet.getLastRow(), 5).getValue().length - 1)),
+    "value2" : range.getCell(sheet.getLastRow(), 3).getValue()
+  };
+  var optionsReddit = {
+    'method' : 'post',
+    'contentType': 'application/json',
+    'payload' : JSON.stringify(body)
+  };
+  UrlFetchApp.fetch(webhook, optionsReddit);
+  
+}
+
+/*
+THE BELOW CODE DOESN'T WORK, I DON'T KNOW WHY, BUT IT'S COMMENTED OUT FOR A REASON
+function postToReddit(title, body, subreddit) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheets()[0];
+  var range = sheet.getRange(1,1,sheet.getMaxRows(), sheet.getMaxColumns());
+  var lastRow = sheet.getLastRow();
+  var nextRow = lastRow + 1;
+  var Authent = {
+    'Authorization': 'Basic <auth token thing>'
+  };
+  var dataRefresh = {
+    'grant_type' : 'refresh_token',
+    'refresh_token' : '<refresh token>'
+  };
+  var optionsRefresh = {
+    'method' : 'post',
+    'headers' : Authent,
+    'payload' : dataRefresh
+  };
+  var response = UrlFetchApp.fetch('https://www.reddit.com/api/v1/access_token', optionsRefresh);
+  if (response.getResponseCode() !== 200) {
+  	Logger.log('ERROR: Invalid status code when getting acces token: ' + response.getresponseCode());
+  	Logger.log(response.getContentText());
+    
+    // You may want to exit the function if getting the access token doesn't work. To do so, uncomment the next line
+    // return;
+  }
+  var refreshResponse = JSON.parse(response);
+  var accessToken = refreshResponse.access_token;
+  Logger.log(accessToken);
+  
+  var dataPost = {
+    title: 'Factorio Friday Facts',
+    url: range.getCell(sheet.getLastRow(), 3).getValue(),
+    sr: 'bottest', // subreddit
+    kind: 'link' // important
+  };
+  var headersPost = {
+    'Authorization' : 'bearer' + accessToken,
+    'User-Agent' : 'GDocs:UHbHH_GlSv0-Xg:0.0.1 (by /u/MSixteenI6)'
+  };
+  var optionsPost = {
+    'method' : 'post',
+    'headers' : headersPost,
+    'payload' : dataPost
+  };
+    
+  var submitResponse = UrlFetchApp.fetch('https://oauth.reddit.com/api/v1/submit', optionsPost);
+  if (submitResponse.getResponseCode() !== 200) {
+  	Logger.log('ERROR: Invalid status code when submitting post: ' + submitResponse.getresponseCode());
+  	Logger.log(submitResponse.getContentText());
+    
+    // You may want to exit the function if submitting doesn't work (though this is the end of the process anyway). To do so, uncomment the next line
+    // return;
+  }
+}
+*/
+
+// Secret: just going to check where to include the access token
+// Secret: i think it's in the headers
+
+// Secret: ok, a fair bit of reading later
+// Secret: this stuff is really hidden and not anywhere easy to find at all
+
+// Secret: requests are based at https://oauth.reddit.com/ 
+// Secret: so https://oauth.reddit.com/api/v1/submit
+
+// Secret: You need an 'Authorization' header, with a value of 'bearer <your_access_token>'
+// M16: gimme a moment to make the options object
+
+// Secret: comments has to be one of the more inefficient forms of communication i have used
+//M16: ikr. fuck it, im putting discord in a smaller window for side by side windows
+
+function getNameofFFF() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheets()[0];
+  var range = sheet.getRange(1,1,sheet.getMaxRows(), sheet.getMaxColumns());
+  var lastRow = sheet.getLastRow();
+  var nextRow = lastRow + 1;
+  var response = UrlFetchApp.fetch('https://www.factorio.com/blog/post/fff-220');
+  var responseString = response.getContentText();
+  var sNdx = responseString.indexOf("Friday Facts #");
+  var eNdx = responseString.indexOf("| Factorio");
+  var FFFTitle = responseString.substring(sNdx, eNdx);
+  newLogLine("Indexes");
+  Logger.log("Character at index " + sNdx + " is " + responseString.charAt(sNdx));
+  Logger.log("Character at index " + eNdx + " is " + responseString.charAt(eNdx));
+  Logger.log('The Title of the FFF is "' + FFFTitle + '"');
+  Logger.log('Title Without Space is "' + range.getCell(sheet.getLastRow(), 5).getValue().substring(0, range.getCell(sheet.getLastRow(), 5).getValue().length - 1) + '"');
+  //newLogLine("Headers");
+  //Logger.log(response.getHeaders());
+  //newLogLine("Data as String");
+  //Logger.log(response.getContentText());
+  //newLogLine("Response");
+  //Logger.log(response);
+}
